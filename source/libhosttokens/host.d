@@ -1,4 +1,7 @@
 /**
+* Parses the URL-host (not the url)
+* e.g. www.github.com , lb1.www.some-cool-domain.co.uk , 127.0.0.1 , 2001:0db8:0:0:0:0:1428:57ab
+*
 * Copyright:
 * (C) 2016 Martin Brzenska
 *
@@ -8,6 +11,13 @@
 */
 module libhosttokens.host;
 
+/**
+* Parses a hostname
+* Params:
+*   host = the Hostname to be parsed
+*
+* Returns: A Host struct containing the the hostname elements (subdomain , paylevelDomain , tld ...).
+*/
 auto parseHost(string host) {
   import std.array : split;
   import std.algorithm.searching : find;
@@ -16,26 +26,38 @@ auto parseHost(string host) {
 
   import libhosttokens.ccSLD : ccSLDs;
 
+  /**
+  * A parsed hostname.
+  */
   struct Host {
+    ///The original hostname.
     string host;
+    ///A list of subdomains.
     string[] subdomains;
+    ///The part of the domain between the subdomain and tld/ccSLD.
     string lowlevelDomain;
+    ///A list of TLD or ccSLD and TLD.
     string[] reglevels = [];
+    ///True if the hostname is a IP (IPv4 or IPv6).
     bool isIP;
+
 
     string toString() {
       return this.host;
     }
 
+    ///The TLD or ccSLD.TLD.
     @property tld() {
       import std.array : join;
       return this.reglevels.join(".");
     }
 
+    ///The part of a hostname, that is before (right of) the subdomains.
     @property paylevelDomain() {
       return (this.lowlevelDomain.length ? this.lowlevelDomain ~ ( this.isIP ? "" : ".") : "") ~ this.tld;
     }
 
+    ///The part of a hostname, that is after (left of) the paylevelDomain.
     @property subdomain() {
       import std.array : join;
       return this.subdomains.join(".");
