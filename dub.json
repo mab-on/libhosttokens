@@ -1,0 +1,10 @@
+{
+	"name": "libhosttokens",
+	"authors": [
+		"Martin Brzenska"
+	],
+	"description": "Url-Host tokenizer",
+	"copyright": "Copyright © 2016, Martin Brzenska",
+	"license": "MIT",
+	"targetType": "library"
+}
