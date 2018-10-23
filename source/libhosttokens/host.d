@@ -11,6 +11,47 @@
 */
 module libhosttokens.host;
 
+
+/**
+* A parsed hostname.
+*/
+struct Host
+{
+  ///The original hostname.
+  string host;
+  ///A list of subdomains.
+  string[] subdomains;
+  ///The part of the domain between the subdomain and tld/ccSLD.
+  string lowlevelDomain;
+  ///A list of TLD or ccSLD and TLD.
+  string[] reglevels = [];
+  ///True if the hostname is a IP (IPv4 or IPv6).
+  bool isIP;
+
+
+  string toString() {
+    return this.host;
+  }
+
+  ///The TLD or ccSLD.TLD.
+  @property tld() {
+    import std.array : join;
+    return this.reglevels.join(".");
+  }
+
+  ///The part of a hostname, that is before (right of) the subdomains.
+  @property paylevelDomain() {
+    return (this.lowlevelDomain.length ? this.lowlevelDomain ~ ( this.isIP ? "" : ".") : "") ~ this.tld;
+  }
+
+  ///The part of a hostname, that is after (left of) the paylevelDomain.
+  @property subdomain() {
+    import std.array : join;
+    return this.subdomains.join(".");
+  }
+
+}
+
 /**
 * Parses a hostname
 * Params:
@@ -18,54 +59,19 @@ module libhosttokens.host;
 *
 * Returns: A Host struct containing the the hostname elements (subdomain , paylevelDomain , tld ...).
 */
-auto parseHost(string host) {
+immutable(Host) parseHost(string host) {
   import std.array : split;
   import std.algorithm.searching : find;
   import std.algorithm.mutation : reverse;
   import std.socket : parseAddress , Address , SocketException;
 
   import libhosttokens.ccSLD : ccSLDs;
+  
+  string[] sHost_subdomains;
+  string sHost_lowlevelDomain;
+  string[] sHost_reglevels;
+  bool sHost_isIP;
 
-  /**
-  * A parsed hostname.
-  */
-  struct Host {
-    ///The original hostname.
-    string host;
-    ///A list of subdomains.
-    string[] subdomains;
-    ///The part of the domain between the subdomain and tld/ccSLD.
-    string lowlevelDomain;
-    ///A list of TLD or ccSLD and TLD.
-    string[] reglevels = [];
-    ///True if the hostname is a IP (IPv4 or IPv6).
-    bool isIP;
-
-
-    string toString() {
-      return this.host;
-    }
-
-    ///The TLD or ccSLD.TLD.
-    @property tld() {
-      import std.array : join;
-      return this.reglevels.join(".");
-    }
-
-    ///The part of a hostname, that is before (right of) the subdomains.
-    @property paylevelDomain() {
-      return (this.lowlevelDomain.length ? this.lowlevelDomain ~ ( this.isIP ? "" : ".") : "") ~ this.tld;
-    }
-
-    ///The part of a hostname, that is after (left of) the paylevelDomain.
-    @property subdomain() {
-      import std.array : join;
-      return this.subdomains.join(".");
-    }
-
-  }
-
-  Host sHost;
   bool isIPaddr = true;
   Address addr;
   try
@@ -76,11 +82,16 @@ auto parseHost(string host) {
     isIPaddr = false;
   }
 
-  sHost.host = host;
   if(isIPaddr) {
-    sHost.isIP = true;
-    sHost.lowlevelDomain = addr.toAddrString();
-    return sHost;
+    sHost_isIP = true;
+    sHost_lowlevelDomain = addr.toAddrString();
+    return immutable(Host)(
+      host,
+      [],
+      sHost_lowlevelDomain,
+      [],
+      sHost_isIP
+    );
   }
 
   auto arrHost = split(host , ".");
@@ -92,30 +103,36 @@ auto parseHost(string host) {
   foreach(size_t level , string domain ; arrHost) {
     lastLevel = level;
     if( level == 0 && domain !in ccSLDs) {
-      sHost.reglevels ~= domain;
+      sHost_reglevels ~= domain;
       break;
     }
     else if( level == 0 && domain in ccSLDs) {
       ccSLD = domain;
-      sHost.reglevels ~= ccSLD;
+      sHost_reglevels ~= ccSLD;
     }
     else if( level == 1 && ccSLDs[ccSLD].find(domain)) {
-      sHost.reglevels ~= domain;
+      sHost_reglevels ~= domain;
       break;
     }
   }
-  sHost.reglevels.reverse();
+  sHost_reglevels.reverse();
 
   //Paydomain
-  sHost.lowlevelDomain = arrHost[++lastLevel];
+  sHost_lowlevelDomain = arrHost[++lastLevel];
 
   //Subdomains
   for(size_t i = ++lastLevel ; i < arrHost.length ; i++) {
-    sHost.subdomains ~= arrHost[i];
+    sHost_subdomains ~= arrHost[i];
   }
-  sHost.subdomains.reverse();
+  sHost_subdomains.reverse();
 
-  return sHost;
+  return immutable(Host)(
+    host,
+    sHost_subdomains.idup,
+    sHost_lowlevelDomain,
+    sHost_reglevels.idup,
+    sHost_isIP
+  );
 }
 
 unittest {
